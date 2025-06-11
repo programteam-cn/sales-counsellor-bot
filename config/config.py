@@ -8,6 +8,7 @@ def load_config():
     """Load and return configuration values from environment variables."""
     config = {
         "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY"),
+        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
         "QDRANT_URL": os.getenv("QDRANT_URL"),
         "QDRANT_API_KEY": os.getenv("QDRANT_API_KEY"),
         "QDRANT_COLLECTION": os.getenv("QDRANT_COLLECTION", "sales_counsellor")
@@ -22,6 +23,7 @@ def load_config():
 
 # For backward compatibility
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "sales_counsellor")

@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 from chat.rag_chat import SalesCounsellorBot
 from embeddings.embed_docs import process_uploaded_file, reembed_all_documents
+from utils.conversation_manager import ConversationManager
 
 # Set up logging
 logging.basicConfig(
@@ -17,9 +18,21 @@ def initialize_session_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "chatbot" not in st.session_state:
-        st.session_state.chatbot = SalesCounsellorBot()
+        # Initialize chatbot and ensure documents are embedded
+        try:
+            # First re-embed all documents to ensure they're in the vector store
+            reembed_all_documents()
+            # Then initialize the chatbot
+            st.session_state.chatbot = SalesCounsellorBot()
+        except Exception as e:
+            st.error(f"Error initializing chatbot: {str(e)}")
+            logging.error(f"Error initializing chatbot: {str(e)}")
+            st.session_state.chatbot = None
     if "uploaded_files" not in st.session_state:
         st.session_state.uploaded_files = set()
+    if "conversation_manager" not in st.session_state:
+        st.session_state.conversation_manager = ConversationManager()
+        st.session_state.conversation_manager.start_new_session()
 
 def save_uploaded_file(uploaded_file, data_dir: Path) -> Path:
     """Save an uploaded file to the data directory."""
@@ -58,6 +71,11 @@ def main():
 
     # Initialize session state
     initialize_session_state()
+
+    # Check if chatbot initialization failed
+    if st.session_state.chatbot is None:
+        st.error("Failed to initialize the chatbot. Please check the logs and try again.")
+        return
 
     # Custom CSS
     st.markdown("""
@@ -148,6 +166,8 @@ def main():
         if st.button("Clear Chat History"):
             st.session_state.messages = []
             st.session_state.chatbot.clear_history()
+            # Archive current session and start new one
+            st.session_state.conversation_manager.clear_current_session()
             st.rerun()
 
     # Main chat interface
@@ -172,6 +192,9 @@ def main():
     if prompt := st.chat_input("What would you like to know?"):
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
+        # Add to conversation history
+        st.session_state.conversation_manager.add_message("user", prompt)
+        
         with st.chat_message("user"):
             st.markdown(prompt)
 
@@ -185,11 +208,15 @@ def main():
                     )
                     st.markdown(response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
+                    # Add to conversation history
+                    st.session_state.conversation_manager.add_message("assistant", response)
                 except Exception as e:
                     error_message = "I apologize, but I encountered an error. Please try again."
                     st.error(error_message)
                     logging.error(f"Error getting response: {str(e)}")
                     st.session_state.messages.append({"role": "assistant", "content": error_message})
+                    # Add error to conversation history
+                    st.session_state.conversation_manager.add_message("assistant", error_message)
 
 if __name__ == "__main__":
     main() 

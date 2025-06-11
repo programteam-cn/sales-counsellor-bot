@@ -4,6 +4,7 @@ import logging
 from typing import List, Tuple, Optional
 from pathlib import Path
 import tempfile
+from datetime import datetime
 
 # Add project root to Python path
 project_root = str(Path(__file__).parent.parent)
@@ -12,10 +13,11 @@ if project_root not in sys.path:
 
 from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain_community.document_loaders.text import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
+from pathlib import Path
 from config.config import load_config
 
 # Set up logging
@@ -118,64 +120,57 @@ def load_documents() -> List:
         raise
 
 def process_uploaded_file(file_path: Path) -> bool:
-    """Process and embed a single file."""
     try:
-        # Load configuration
-        config = load_config()
-
         # Load the document
-        documents = load_documents_from_file(file_path)
-        if not documents:
-            logging.error(f"No documents loaded from {file_path}")
-            return False
-
-        # Split documents
+        loader = TextLoader(str(file_path))
+        documents = loader.load()
+        
+        # Add metadata to each document
+        for doc in documents:
+            # Extract course type from filename or content
+            course_type = "Data Analytics"  # You can make this dynamic based on file content or name
+            doc.metadata.update({
+                "course_type": course_type,
+                "source": file_path.name,
+                "processed_date": datetime.now().isoformat()
+            })
+        
+        # Split documents into chunks
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
             length_function=len,
+            add_start_index=True
         )
         splits = text_splitter.split_documents(documents)
-        logging.info(f"Split {len(documents)} documents into {len(splits)} chunks")
-
+        
+        # Log the number of chunks created
+        logging.info(f"Created {len(splits)} chunks from {file_path.name}")
+        
         # Initialize embeddings
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
-            google_api_key=config["GOOGLE_API_KEY"]
+        embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large",
+            openai_api_key=load_config()["OPENAI_API_KEY"],
+            dimensions=3072
         )
-
+        
         # Initialize Qdrant client
         qdrant_client = QdrantClient(
-            url=config["QDRANT_URL"],
-            api_key=config["QDRANT_API_KEY"]
+            url=load_config()["QDRANT_URL"],
+            api_key=load_config()["QDRANT_API_KEY"]
         )
-
-        # Check if collection exists
-        try:
-            collection_info = qdrant_client.get_collection("sales_counsellor")
-            logging.info(f"Using existing collection with {collection_info.points_count} points")
-        except Exception:
-            # Create collection if it doesn't exist
-            qdrant_client.create_collection(
-                collection_name="sales_counsellor",
-                vectors_config={
-                    "size": 768,  # Size of the embedding vectors
-                    "distance": "Cosine"
-                }
-            )
-            logging.info("Created new collection 'sales_counsellor'")
-
+        
         # Initialize vector store
         vector_store = QdrantVectorStore(
             client=qdrant_client,
             collection_name="sales_counsellor",
             embedding=embeddings
         )
-
-        # Add only the new document to vector store
+        
+        # Add documents to vector store with metadata
         vector_store.add_documents(splits)
-        logging.info(f"Successfully added {len(splits)} chunks from {file_path.name} to vector store")
-
+        logging.info(f"Successfully added {len(splits)} chunks from {file_path.name} to vector store with metadata")
+        
         return True
     except Exception as e:
         logging.error(f"Error processing file {file_path}: {str(e)}")
@@ -187,10 +182,11 @@ def reembed_all_documents() -> bool:
         # Load configuration
         config = load_config()
 
-        # Initialize embeddings
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
-            google_api_key=config["GOOGLE_API_KEY"]
+        # Initialize embeddings with OpenAI text-embedding-3-large
+        embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large",
+            openai_api_key=config["OPENAI_API_KEY"],
+            dimensions=3072  # Using the larger dimension size for better performance
         )
 
         # Initialize Qdrant client
@@ -202,19 +198,19 @@ def reembed_all_documents() -> bool:
         # Delete existing collection
         try:
             qdrant_client.delete_collection("sales_counsellor")
-            logging.info("Deleted existing collection to start fresh")
+            logging.info("Deleted existing collection to ensure consistency")
         except Exception as e:
             logging.info(f"No existing collection to delete: {str(e)}")
 
-        # Create new collection
+        # Create new collection with correct dimensions for text-embedding-3-large
         qdrant_client.create_collection(
             collection_name="sales_counsellor",
             vectors_config={
-                "size": 768,
+                "size": 3072,  # Size for text-embedding-3-large
                 "distance": "Cosine"
             }
         )
-        logging.info("Created new collection 'sales_counsellor'")
+        logging.info("Created new collection 'sales_counsellor' with correct dimensions")
 
         # Load all documents from data directory
         all_documents = []

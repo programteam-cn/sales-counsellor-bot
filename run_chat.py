@@ -18,13 +18,13 @@ def start_chat():
         print("\nSales Counsellor Bot is initializing...")
         
         # Initialize the chain for this session
-        qa = get_chain()
+    qa = get_chain()
         
         print("\n✅ Sales Counsellor Bot is ready!")
         print("Starting a new session...")
         print("Type 'exit' to end the session or 'help' for available commands.")
         
-        while True:
+    while True:
             try:
                 query = input("\nYou: ").strip()
                 
@@ -33,7 +33,7 @@ def start_chat():
                     
                 if query.lower() == 'exit':
                     print("Goodbye!")
-                    break
+            break
                     
                 if query.lower() == 'help':
                     print("Commands: exit, help")

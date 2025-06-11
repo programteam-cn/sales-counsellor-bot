@@ -1,194 +1,242 @@
-# Coding Ninjas - AI Sales Counsellor Bot
+# Sales Counsellor Bot 🤖
 
-![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)
-![Framework](https://img.shields.io/badge/Framework-Streamlit%20%7C%20LangChain-orange)
-![LLM](https://img.shields.io/badge/LLM-Google%20Gemini-green)
-![Database](https://img.shields.io/badge/VectorDB-Qdrant-red)
+A RAG-based chatbot for sales counselling, built with Streamlit, LangChain, and Gemini. This bot helps potential students understand Coding Ninjas courses and make informed decisions about their learning journey.
 
-This project is an advanced AI-powered chatbot designed to act as **"Alisha,"** an intelligent and personable sales counsellor for Coding Ninjas. It uses a **Retrieval-Augmented Generation (RAG)** architecture to provide accurate, context-aware answers from a custom knowledge base, ensuring that prospective students receive the most relevant and persuasive information about courses, placements, and career outcomes.
+## 🏗️ Architecture
 
-The application is built with a user-friendly **Streamlit** interface, enabling real-time chat and dynamic management of the knowledge base through document uploads.
-
-## Key Features
-
--   **Advanced RAG Architecture**: Goes beyond a standard LLM's knowledge by retrieving information directly from your documents (brochures, sales guides, FAQs) before generating an answer. This minimizes hallucinations and ensures responses are tailored to Coding Ninjas' specific offerings.
--   **Dynamic Knowledge Management**: The Streamlit sidebar allows administrators to upload new PDF or TXT files to the knowledge base on the fly. Documents can also be deleted, and the knowledge base will automatically re-index to reflect the changes.
--   **Persona-Driven Interaction**: The bot embodies the persona of "Alisha," a friendly, enthusiastic, and convincing sales counsellor, as defined by a detailed system prompt. This ensures a consistent and engaging user experience.
--   **Conversational Memory**: Maintains the context of the ongoing conversation, allowing for natural follow-up questions and a coherent dialogue flow.
--   **Natural Information Gathering**: Mimics a real sales counsellor by subtly asking clarifying questions to understand a user's background (e.g., career stage, experience) to provide more personalized and effective advice.
-
-## How It Works: A Deep Dive into the Architecture
-
-This project is not a simple chatbot. It's a sophisticated RAG system that bridges the gap between a powerful language model and your proprietary data.
-
-### The "Why" - Technical Decisions Explained
-
-#### Phase 1: Knowledge Ingestion (`embeddings/embed_docs.py`)
-
-This is the process of teaching the bot. It converts your unstructured documents into a structured, searchable library.
-
-1.  **Document Loading**: We use LangChain's `PyPDFLoader` and `TextLoader`.
-    *   **Why?** These are robust, community-vetted tools for parsing text content from the most common document formats, preserving metadata where possible.
-
-2.  **Text Splitting**: The loaded text is split into smaller chunks using `RecursiveCharacterTextSplitter`.
-    *   **Why?** LLMs have a limited context window. Sending a whole document is inefficient. This splitter is intelligent—it tries to split text along semantic boundaries (paragraphs, sentences) before making hard cuts. The `chunk_overlap` ensures that context isn't lost between chunks.
-
-3.  **Embedding Creation**: Each text chunk is converted into a high-dimensional vector using Google's `models/embedding-001`.
-    *   **Why?** An embedding is a numerical representation of semantic meaning. Text with similar meanings will have vectors that are "close" to each other in vector space. This is the magic that enables semantic search. Google's model is chosen for its performance and its synergy with the Gemini LLM.
-
-4.  **Vector Storage**: The embeddings (vectors) and their corresponding text chunks are stored in **Qdrant**.
-    *   **Why Qdrant?** A standard database can't efficiently search for "semantic closeness." Qdrant is a specialized vector database built for extremely fast and scalable similarity searches using algorithms like HNSW (Hierarchical Navigable Small World). It's the engine that powers our retrieval.
-
-#### Phase 2: Inference (`chat/rag_chat.py`)
-
-This is what happens every time a user sends a message.
-
-1.  **Query Embedding**: The user's question is converted into a vector using the *same* `embedding-001` model.
-    *   **Why?** To find relevant documents, the query must be in the same vector space as the stored chunks.
-
-2.  **Similarity Search (Retrieval)**: LangChain, via the Qdrant client, takes the query vector and searches for the 'k' most similar document vectors in the database.
-    *   **How?** It uses a distance metric (like Cosine Similarity) to find the text chunks that are semantically closest to the user's question. These retrieved chunks form the "context."
-
-3.  **Prompt Augmentation**: This is the most critical step. A master prompt is constructed using:
-    *   **The System Persona**: The detailed instructions from `prompts/base_prompt.txt` that tell the LLM how to behave as "Alisha."
-    *   **Retrieved Context**: The relevant document chunks found in the previous step.
-    *   **Chat History**: The last few turns of the conversation, providing short-term memory.
-    *   **The User's Question**: The latest query from the user.
-
-4.  **LLM Generation**: The final, augmented prompt is sent to Google's `gemini-pro` LLM.
-    *   **Why?** The LLM now has everything it needs: its personality (`Persona`), the relevant facts (`Context`), the conversation flow (`History`), and the user's need (`Question`). It uses this to generate a response that is both factually grounded in the provided documents and conversationally appropriate.
-
-## Technology Stack
-
-| Component           | Technology                               | Why it was chosen                                                                                                                                                                                            |
-| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **App Framework**   | `Streamlit`                              | Perfect for rapidly building data-centric and interactive web apps with pure Python. Ideal for demos and internal tools with features like chat interfaces and file uploaders built-in.                        |
-| **AI Orchestration**| `LangChain`                              | The industry-standard framework for gluing together components of an LLM application. It simplifies the RAG pipeline, from document loading to managing prompts and interacting with the vector store.        |
-| **LLM & Embeddings**| `Google Generative AI` (Gemini, embedding-001) | Provides a powerful, state-of-the-art LLM (Gemini) for high-quality text generation and a high-performance model for creating text embeddings. A cohesive and well-supported ecosystem.                |
-| **Vector Database** | `Qdrant`                                 | A high-performance, open-source vector database built for speed and scale. It's purpose-built for the fast similarity searches required for RAG and offers advanced filtering capabilities.                  |
-| **Configuration**   | `python-dotenv`                          | A simple and effective way to manage secrets and configuration (like API keys) by loading them from a `.env` file, keeping them out of the source code.                                                   |
-| **Document Parsing**| `pypdf`                                  | A reliable and pure-Python library for extracting text from PDF documents, which are a primary format for brochures and detailed guides.                                                                     |
-
-## Project Structure
-
-```
-.
-├── 📄 .env.example          # Example environment variables file
-├── 📄 .gitignore
-├── 📄 README.md
-├── 📄 app.py                # Main Streamlit web application entrypoint
-├── 📄 requirements.txt      # List of Python dependencies
-├── 📄 run_chat.py           # Entrypoint for the command-line chat interface
-├── 📂 chat/
-│   └── 📄 rag_chat.py       # Core logic for the RAG chain, memory, and response generation
-├── 📂 config/
-│   └── 📄 config.py         # Loads and validates environment variables
-├── 📂 data/                  # Directory to store your knowledge base documents (PDFs, TXT)
-├── 📂 embeddings/
-│   └── 📄 embed_docs.py     # Script for processing and embedding documents into Qdrant
-└── 📂 prompts/
-    └── 📄 base_prompt.txt     # The master system prompt defining the bot's persona and rules
+```mermaid
+graph TD
+    A[Streamlit App] --> B[Sales Counsellor Bot]
+    B --> C[Document Processing]
+    B --> D[Conversation Management]
+    B --> E[Response Generation]
+    
+    C --> C1[Document Loader]
+    C --> C2[Text Splitter]
+    C --> C3[Embeddings]
+    C --> C4[Vector Store]
+    
+    D --> D1[Session Management]
+    D --> D2[History Tracking]
+    D --> D3[YAML Storage]
+    
+    E --> E1[Query Understanding]
+    E --> E2[Context Retrieval]
+    E --> E3[LLM Response]
 ```
 
-## Setup and Installation
+## 📁 Project Structure
 
-Follow these steps to run the Sales Counsellor Bot locally.
-
-### 1. Prerequisites
-
--   Python 3.9+
--   An active **Google AI API Key**. You can get one from [Google AI Studio](https://makersuite.google.com/).
--   A **Qdrant instance**. You can use the free [Qdrant Cloud tier](https://cloud.qdrant.io/) or run it locally via Docker. You will need the **Cluster URL** and an **API Key**.
-
-### 2. Clone the Repository
-
-```bash
-git clone https://github.com/programteam-cn/sales-counsellor-bot.git
-cd sales-counsellor-bot
+```
+sales-counsellor-bot/
+├── app.py                 # Main Streamlit application
+├── chat/
+│   └── rag_chat.py       # RAG-based chat implementation
+├── embeddings/
+│   └── embed_docs.py     # Document processing and embedding
+├── utils/
+│   ├── __init__.py
+│   └── conversation_manager.py  # Conversation history management
+├── prompts/
+│   └── base_prompt.txt   # System prompt for the bot
+├── data/                 # Document storage
+├── conversation_history/ # YAML files for conversation logs
+└── config/
+    └── config.py         # Configuration management
 ```
 
-### 3. Set Up a Virtual Environment
+## 🔄 Application Flow
 
-It is highly recommended to use a virtual environment to avoid package conflicts.
+### 1. Application Startup
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant Bot
+    participant VectorStore
+    participant Docs
 
-```bash
-# For Mac/Linux
-python3 -m venv venv
-source venv/bin/activate
-
-# For Windows
-python -m venv venv
-.\venv\Scripts\activate
+    User->>App: Start Streamlit App
+    App->>App: Initialize Session State
+    App->>Docs: Re-embed Documents
+    Docs->>VectorStore: Store Embeddings
+    App->>Bot: Initialize Chatbot
+    App->>App: Setup UI Components
+    App-->>User: Display Chat Interface
 ```
 
-### 4. Install Dependencies
-
-Install all required packages using pip.
-
-```bash
-pip install -r requirements.txt
+### 2. Document Processing
+```mermaid
+graph TD
+    A[Upload Document] --> B[Process File]
+    B --> C[Split into Chunks]
+    C --> D[Generate Embeddings]
+    D --> E[Store in Vector DB]
+    
+    subgraph "Document Processing"
+        B --> B1[PDF/TXT Loader]
+        C --> C1[1000 char chunks]
+        C --> C2[200 char overlap]
+        D --> D1[OpenAI Embeddings]
+        E --> E1[Qdrant Vector Store]
+    end
 ```
 
-### 5. Configure Environment Variables
+### 3. Chat Flow
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant Bot
+    participant VectorStore
+    participant LLM
+    participant History
 
-Create a `.env` file by copying the example file.
-
-```bash
-cp .env.example .env
+    User->>App: Send Message
+    App->>History: Log User Message
+    App->>Bot: Process Query
+    Bot->>Bot: Understand Query
+    Bot->>Bot: Enhance Query
+    Bot->>VectorStore: Search Documents
+    VectorStore-->>Bot: Return Context
+    Bot->>LLM: Generate Response
+    LLM-->>Bot: Return Response
+    Bot->>History: Log Bot Response
+    Bot-->>App: Send Response
+    App-->>User: Display Response
 ```
 
-Now, open the `.env` file and add your secret keys:
+## 🛠️ Key Components
 
-```dotenv
-# Your API key from Google AI Studio
-GOOGLE_API_KEY="AIzaSy..."
+### 1. Sales Counsellor Bot (`chat/rag_chat.py`)
+- **Purpose**: Core chatbot implementation using RAG
+- **Key Features**:
+  - Query understanding and enhancement
+  - Document retrieval
+  - Response generation
+  - Conversation management
 
-# Your Qdrant Cloud URL
-QDRANT_URL="https://your-unique-id.cloud.qdrant.io:6333"
-
-# Your Qdrant API Key
-QDRANT_API_KEY="your-qdrant-secret-key"
+```python
+class SalesCounsellorBot:
+    def __init__(self):
+        # Initialize components
+        self.initialize_chain()
+        self.setup_keyword_mappings()
+    
+    def get_response(self, question: str, chat_history: List[Dict]):
+        # Process query
+        # Retrieve context
+        # Generate response
 ```
 
-### 6. Add Knowledge Documents
+### 2. Document Processing (`embeddings/embed_docs.py`)
+- **Purpose**: Handle document ingestion and embedding
+- **Features**:
+  - PDF/TXT file loading
+  - Text chunking
+  - Embedding generation
+  - Vector store management
 
-Place any PDF or TXT files you want the bot to learn from into the `data/` directory. Create the directory if it doesn't exist.
+### 3. Conversation Manager (`utils/conversation_manager.py`)
+- **Purpose**: Manage conversation history
+- **Features**:
+  - Session management
+  - YAML-based storage
+  - Timestamp tracking
+  - Message logging
 
-### 7. Run the Initial Data Ingestion
+### 4. Main Application (`app.py`)
+- **Purpose**: Streamlit web interface
+- **Features**:
+  - Chat interface
+  - Document management
+  - Session handling
+  - Error management
 
-You must "teach" the bot by embedding your documents. Run the following script. This will process all files in the `data/` directory and store them in Qdrant.
+## 🔧 Configuration
 
-```bash
-python embeddings/embed_docs.py
+The application uses environment variables for configuration:
+```env
+GOOGLE_API_KEY=your_gemini_api_key
+OPENAI_API_KEY=your_openai_api_key
+QDRANT_URL=your_qdrant_url
+QDRANT_API_KEY=your_qdrant_api_key
+QDRANT_COLLECTION=sales_counsellor
 ```
 
-Watch the console for logs. You should see it creating a collection named `sales_counsellor` and embedding your documents.
+## 🚀 Getting Started
 
-### 8. Run the Application
+1. **Setup Environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+   pip install -r requirements.txt
+   ```
 
-You have two ways to interact with the bot.
+2. **Configure Environment**:
+   - Copy `.env.example` to `.env`
+   - Fill in your API keys
 
-#### Option A: Streamlit Web App (Recommended)
+3. **Run the Application**:
+   ```bash
+   streamlit run app.py
+   ```
 
-This provides a full graphical interface for chatting and managing documents.
+## 📝 Conversation History
 
-```bash
-streamlit run app.py
+Conversations are stored in YAML format:
+```yaml
+session_start: "2024-03-11T15:30:00"
+conversation:
+  - timestamp: "2024-03-11T15:30:05"
+    role: "user"
+    content: "Tell me about the DA course"
+  - timestamp: "2024-03-11T15:30:10"
+    role: "assistant"
+    content: "The Data Analytics course covers..."
+session_end: "2024-03-11T15:45:00"
 ```
 
-Open your web browser to the local URL provided by Streamlit (usually `http://localhost:8501`).
+## 🔍 Key Features
 
-#### Option B: Command-Line Interface
+1. **RAG Implementation**:
+   - Document retrieval
+   - Context-aware responses
+   - Semantic search
 
-For a simpler, terminal-based chat experience:
+2. **Conversation Management**:
+   - Session tracking
+   - History logging
+   - YAML storage
 
-```bash
-python run_chat.py
-```
+3. **Document Processing**:
+   - Automatic embedding
+   - Chunk management
+   - Vector storage
 
-## How to Use the App
+4. **User Interface**:
+   - Clean Streamlit interface
+   - Document management
+   - Real-time chat
 
-1.  **Chatting**: Simply type your questions in the input box and press Enter. The conversation history is maintained for your session.
-2.  **Uploading Documents**: Use the sidebar in the Streamlit app to upload new PDF or TXT files. The file will be automatically processed and added to the knowledge base.
-3.  **Deleting Documents**: Click the trash can icon next to a document in the sidebar to delete it. **Important**: Deleting a file triggers a full re-embedding of all remaining documents to ensure the knowledge base is clean and consistent. This may take a few moments.
-4.  **Clearing Chat**: Click the "Clear Chat History" button to reset the current conversation.
+## 🤝 Contributing
+
+1. Fork the repository"""
+Sales Counsellor Bot - A RAG-based chatbot for sales counselling.
+""" 
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- LangChain for RAG implementation
+- Streamlit for the web interface
+- Google Gemini for LLM capabilities
+- OpenAI for embeddings
+- Qdrant for vector storage 
